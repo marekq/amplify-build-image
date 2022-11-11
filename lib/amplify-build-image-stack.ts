@@ -1,38 +1,41 @@
-import * as cdk from '@aws-cdk/core';
-import { DockerImageAsset } from '@aws-cdk/aws-ecr-assets';
+import { CfnOutput, Stack, StackProps } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { DockerImageAsset, Platform } from 'aws-cdk-lib/aws-ecr-assets';
+import { Repository } from 'aws-cdk-lib/aws-ecr';
+import { DockerImageName, ECRDeployment } from 'cdk-ecr-deployment';
+import { AnyPrincipal } from 'aws-cdk-lib/aws-iam';
 import * as path from 'path';
-import { CfnOutput } from "@aws-cdk/core";
-import * as iam from '@aws-cdk/aws-iam'
 
-export class AmplifyBuildImageStack extends cdk.Stack {
-  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+export class AmplifyBuildImageStack extends Stack {
+  constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // create docker image
-    const amplifydocker = new DockerImageAsset(this, 'amplifydocker', 
+    // Create docker image
+    const amplifyDocker = new DockerImageAsset(this, 'amplifydocker', 
       {
         directory: path.join(__dirname, "../docker"),
-        repositoryName: 'amplifybuild'
+        platform: Platform.LINUX_AMD64
       },
     );
 
-    // create iam policy for all principals
-    function policy(): iam.PolicyStatement {
-      const policy = new iam.PolicyStatement()
-      policy.addPrincipals(new iam.ServicePrincipal('*'))
-      policy.addActions(
-         "ecr:GetDownloadUrlForLayer",
-         "ecr:BatchGetImage",
-         "ecr:BatchCheckLayerAvailability"
-      )
-      return policy
-    }
+    // Create ECR repository
+    const privateECR = new Repository(this, 'amplifydockerpublic', {
+      repositoryName: 'amplify_build_public',
+      imageScanOnPush: true
+    });
 
-    // add iam policy to ecr
-    amplifydocker.repository.addToResourcePolicy(policy())
+    // Upload Docker Image to ECR
+    new ECRDeployment(this, 'DeployMediawikiDockerImage', {
+        src: new DockerImageName(amplifyDocker.imageUri),
+        dest: new DockerImageName(privateECR.repositoryUri),
+    });
+    
+    // Grant public read access to the repository
+    privateECR.grantPull(new AnyPrincipal());
 
-    new CfnOutput(this, "ContainerURI", {
-      value: amplifydocker.repository.repositoryArn
+    // Print container image URI
+    new CfnOutput(this, "Container URI", {
+      value: privateECR.repositoryUri
     });
   }
 }
