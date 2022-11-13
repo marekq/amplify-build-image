@@ -1,4 +1,4 @@
-import { CfnOutput, Stack, StackProps } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { DockerImageAsset, Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import { Repository } from 'aws-cdk-lib/aws-ecr';
@@ -21,7 +21,15 @@ export class AmplifyBuildImageStack extends Stack {
     // Create ECR repository
     const privateECR = new Repository(this, 'amplifydockerpublic', {
       repositoryName: 'amplify_build_public',
-      imageScanOnPush: true
+      imageScanOnPush: true,
+      removalPolicy: RemovalPolicy.DESTROY,
+      lifecycleRules: [
+        {
+          maxImageCount: 3,
+          rulePriority: 1,
+          description: 'Delete old images'
+        }
+      ]
     });
 
     // Upload Docker Image to ECR
